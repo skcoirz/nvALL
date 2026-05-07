@@ -80,9 +80,22 @@ class NotesManager: ObservableObject {
 
     convenience init() {
         let defaults = UserDefaults.standard
-        let defaultPath = FileManager.default.homeDirectoryForCurrentUser
+        let fallbackPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".nvALL").path
-        let path = defaults.string(forKey: "notesDirectory") ?? defaultPath
+        let storedPath = defaults.string(forKey: "notesDirectory")
+        let path: String
+        if let storedPath {
+            path = storedPath
+        } else {
+            let examplesDir = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Examples")
+            if FileManager.default.fileExists(atPath: examplesDir.path) {
+                path = examplesDir.path
+            } else {
+                path = fallbackPath
+            }
+        }
         let ext = defaults.string(forKey: "fileExtension") ?? "md"
         self.init(directory: URL(fileURLWithPath: path), fileExtension: ext)
         self.cursorPositions = (defaults.dictionary(forKey: "cursorPositions") as? [String: Int]) ?? [:]

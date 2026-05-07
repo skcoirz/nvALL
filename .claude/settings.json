@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift build *)",
+      "Bash(swift test *)",
+      "Bash(pkill -x nvALL*)",
+      "Bash(.build/debug/nvALL*)",
+      "Bash(git *)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(mkdir *)",
+      "Read",
+      "Edit",
+      "Write"
+    ]
+  }
+}
