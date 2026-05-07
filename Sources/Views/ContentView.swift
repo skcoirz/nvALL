@@ -1,0 +1,133 @@
+import SwiftUI
+
+struct ContentView: View {
+    @EnvironmentObject var notesManager: NotesManager
+    @FocusState private var isSearchFocused: Bool
+    @State private var listHeight: CGFloat = 140
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SearchBarView(isSearchFocused: $isSearchFocused)
+            Divider()
+            NoteListView()
+                .frame(height: listHeight)
+            DraggableDivider(position: $listHeight, minPosition: 60, maxPosition: 300)
+            EditorView()
+                .frame(minHeight: 100)
+        }
+        .frame(minWidth: 400, minHeight: 350)
+        .onAppear {
+            isSearchFocused = true
+        }
+        .onKeyPress(.escape) {
+            NotificationCenter.default.post(name: .searchBarFocused, object: nil)
+            if !isSearchFocused {
+                isSearchFocused = true
+            } else if !notesManager.searchText.isEmpty {
+                notesManager.searchText = ""
+            } else {
+                notesManager.saveCurrentNote()
+                notesManager.selectedNoteID = nil
+                notesManager.editorContent = ""
+            }
+            return .handled
+        }
+        .background(
+            Button("") {
+                isSearchFocused = true
+            }
+            .keyboardShortcut("l", modifiers: .command)
+            .hidden()
+        )
+    }
+}
+
+struct DraggableDivider: View {
+    @Binding var position: CGFloat
+    let minPosition: CGFloat
+    let maxPosition: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color(nsColor: .separatorColor)
+                .frame(height: 1)
+            Color(nsColor: NSColor(white: 0.98, alpha: 1.0))
+                .frame(height: 1)
+            Color(nsColor: .windowBackgroundColor)
+                .frame(height: 5)
+            Color(nsColor: .separatorColor)
+                .frame(height: 1)
+        }
+        .contentShape(Rectangle())
+        .frame(height: 8)
+        .cursor(.resizeUpDown)
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    let new = position + value.translation.height
+                    position = min(max(new, minPosition), maxPosition)
+                }
+        )
+    }
+}
+
+extension View {
+    func cursor(_ cursor: NSCursor) -> some View {
+        onHover { inside in
+            if inside { cursor.push() }
+            else { NSCursor.pop() }
+        }
+    }
+}
+
+struct SearchBarView: View {
+    @EnvironmentObject var notesManager: NotesManager
+    var isSearchFocused: FocusState<Bool>.Binding
+
+    private var isFocused: Bool {
+        isSearchFocused.wrappedValue
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12))
+                .foregroundColor(isFocused ? .accentColor : .secondary)
+            TextField("Search or create note...", text: $notesManager.searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .focused(isSearchFocused)
+                .onSubmit {
+                    notesManager.createOrSelectFromSearch()
+                }
+                .onKeyPress(.downArrow) {
+                    notesManager.selectNextNote()
+                    return .handled
+                }
+                .onKeyPress(.upArrow) {
+                    notesManager.selectPreviousNote()
+                    return .handled
+                }
+            if !notesManager.searchText.isEmpty {
+                Button(action: { notesManager.searchText = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color(nsColor: .textBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 1.5)
+        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+    }
+}
