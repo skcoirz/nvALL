@@ -6,7 +6,6 @@ struct SettingsView: View {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".nvALL").path
     }()
-    @AppStorage("fileExtension") private var fileExtension: String = "md"
     @AppStorage("maxVersions") private var maxVersions: Int = 50
 
     var body: some View {
@@ -21,11 +20,9 @@ struct SettingsView: View {
                         chooseFolder()
                     }
                 }
-                Picker("File format:", selection: $fileExtension) {
-                    Text("Markdown (.md)").tag("md")
-                    Text("Plain Text (.txt)").tag("txt")
-                }
-                .pickerStyle(.radioGroup)
+                Text("Notes are saved as Markdown (.md) files.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             Section("History") {
                 HStack {
@@ -44,7 +41,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 400, height: 240)
+        .frame(width: 450, height: 300)
     }
 
     private func chooseFolder() {

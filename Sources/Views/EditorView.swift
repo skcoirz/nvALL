@@ -94,12 +94,14 @@ struct HighlightingTextEditor: NSViewRepresentable {
                 textView.scrollToBeginningOfDocument(nil)
             }
             coordinator.lastAppliedSearch = nil
+            Self.applyMarkdownAndHighlights(textView: textView, searchText: searchText)
+            coordinator.lastAppliedSearch = searchText
             coordinator.isUpdatingText = false
         }
 
         if searchText != coordinator.lastAppliedSearch {
             coordinator.lastAppliedSearch = searchText
-            applyHighlights(in: textView)
+            Self.applySearchHighlights(textView: textView, searchText: searchText)
             DispatchQueue.main.async {
                 self.updateScrollbarMarks(textView: textView, scrollView: scrollView)
             }
@@ -110,27 +112,113 @@ struct HighlightingTextEditor: NSViewRepresentable {
         Coordinator(self)
     }
 
-    private func applyHighlights(in textView: NSTextView) {
+    static func applyMarkdownAndHighlights(textView: NSTextView, searchText: String) {
+        guard let storage = textView.textStorage else { return }
+        let fullRange = NSRange(location: 0, length: storage.length)
+        guard fullRange.length > 0 else { return }
+
+        let scrollView = textView.enclosingScrollView
+        let visibleRect = scrollView?.contentView.bounds
+        let selectedRanges = textView.selectedRanges
+
+        storage.beginEditing()
+
+        let baseFont = NSFont.systemFont(ofSize: 13)
+        storage.addAttribute(.font, value: baseFont, range: fullRange)
+        storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: fullRange)
+        storage.removeAttribute(.strikethroughStyle, range: fullRange)
+        storage.removeAttribute(.backgroundColor, range: fullRange)
+
+        applyMarkdownStyling(storage: storage, baseFont: baseFont)
+        applySearchHighlightsToStorage(storage: storage, searchText: searchText)
+
+        storage.endEditing()
+
+        if let visibleRect {
+            scrollView?.contentView.bounds = visibleRect
+        }
+        textView.selectedRanges = selectedRanges
+    }
+
+    static func applySearchHighlights(textView: NSTextView, searchText: String) {
         guard let storage = textView.textStorage else { return }
         let fullRange = NSRange(location: 0, length: storage.length)
         guard fullRange.length > 0 else { return }
 
         storage.beginEditing()
         storage.removeAttribute(.backgroundColor, range: fullRange)
-
-        if !searchText.isEmpty {
-            let content = (storage.string as NSString)
-            let query = searchText.lowercased()
-            var searchStart = 0
-            while searchStart < content.length {
-                let remaining = NSRange(location: searchStart, length: content.length - searchStart)
-                let found = content.range(of: query, options: .caseInsensitive, range: remaining)
-                if found.location == NSNotFound { break }
-                storage.addAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.4), range: found)
-                searchStart = found.location + found.length
-            }
-        }
+        applySearchHighlightsToStorage(storage: storage, searchText: searchText)
         storage.endEditing()
+    }
+
+    private static func applySearchHighlightsToStorage(storage: NSTextStorage, searchText: String) {
+        guard !searchText.isEmpty else { return }
+        let content = (storage.string as NSString)
+        let query = searchText.lowercased()
+        var searchStart = 0
+        while searchStart < content.length {
+            let remaining = NSRange(location: searchStart, length: content.length - searchStart)
+            let found = content.range(of: query, options: .caseInsensitive, range: remaining)
+            if found.location == NSNotFound { break }
+            storage.addAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.4), range: found)
+            searchStart = found.location + found.length
+        }
+    }
+
+    private static let boldPattern = try! NSRegularExpression(pattern: "\\*\\*(.+?)\\*\\*", options: [])
+    private static let italicPattern = try! NSRegularExpression(pattern: "(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)", options: [])
+    private static let boldItalicPattern = try! NSRegularExpression(pattern: "\\*\\*\\*(.+?)\\*\\*\\*", options: [])
+    private static let strikethroughPattern = try! NSRegularExpression(pattern: "~~(.+?)~~", options: [])
+
+    static func applyMarkdownStyling(storage: NSTextStorage, baseFont: NSFont) {
+        let content = storage.string as NSString
+        let fullRange = NSRange(location: 0, length: content.length)
+        let markerColor = NSColor.tertiaryLabelColor
+
+        Self.boldItalicPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
+            guard let match else { return }
+            let inner = match.range(at: 1)
+            let boldItalicFont = NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)
+            let descriptor = boldItalicFont.fontDescriptor.withSymbolicTraits(.italic)
+            let font = NSFont(descriptor: descriptor, size: baseFont.pointSize) ?? boldItalicFont
+            storage.addAttribute(.font, value: font, range: inner)
+            let markerStart = NSRange(location: match.range.location, length: 3)
+            let markerEnd = NSRange(location: match.range.location + match.range.length - 3, length: 3)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerStart)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerEnd)
+        }
+
+        Self.boldPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
+            guard let match else { return }
+            let inner = match.range(at: 1)
+            storage.addAttribute(.font, value: NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold), range: inner)
+            let markerStart = NSRange(location: match.range.location, length: 2)
+            let markerEnd = NSRange(location: match.range.location + match.range.length - 2, length: 2)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerStart)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerEnd)
+        }
+
+        Self.italicPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
+            guard let match else { return }
+            let inner = match.range(at: 1)
+            let descriptor = baseFont.fontDescriptor.withSymbolicTraits(.italic)
+            let italicFont = NSFont(descriptor: descriptor, size: baseFont.pointSize) ?? baseFont
+            storage.addAttribute(.font, value: italicFont, range: inner)
+            let markerStart = NSRange(location: match.range.location, length: 1)
+            let markerEnd = NSRange(location: match.range.location + match.range.length - 1, length: 1)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerStart)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerEnd)
+        }
+
+        Self.strikethroughPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
+            guard let match else { return }
+            let inner = match.range(at: 1)
+            storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: inner)
+            let markerStart = NSRange(location: match.range.location, length: 2)
+            let markerEnd = NSRange(location: match.range.location + match.range.length - 2, length: 2)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerStart)
+            storage.addAttribute(.foregroundColor, value: markerColor, range: markerEnd)
+        }
     }
 
     private func updateScrollbarMarks(textView: NSTextView, scrollView: NSScrollView) {
@@ -215,6 +303,74 @@ struct HighlightingTextEditor: NSViewRepresentable {
 class TabTextView: NSTextView {
     override func insertTab(_ sender: Any?) {
         insertText("  ", replacementRange: selectedRange())
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command) {
+            switch event.charactersIgnoringModifiers {
+            case "b":
+                wrapSelection(prefix: "**", suffix: "**")
+                refreshMarkdown()
+                return
+            case "i":
+                wrapSelection(prefix: "*", suffix: "*")
+                refreshMarkdown()
+                return
+            case "y":
+                wrapSelection(prefix: "~~", suffix: "~~")
+                refreshMarkdown()
+                return
+            default: break
+            }
+        }
+        super.keyDown(with: event)
+    }
+
+    private func refreshMarkdown() {
+        guard let storage = textStorage else { return }
+        let text = storage.string as NSString
+        let cursorPos = min(selectedRange().location, max(text.length - 1, 0))
+        let lineRange = text.lineRange(for: NSRange(location: cursorPos, length: 0))
+        let expandedStart = max(0, lineRange.location - 5)
+        let expandedEnd = min(text.length, lineRange.location + lineRange.length + 5)
+        let range = NSRange(location: expandedStart, length: expandedEnd - expandedStart)
+        guard range.length > 0 else { return }
+
+        let baseFont = NSFont.systemFont(ofSize: 13)
+        let savedBounds = enclosingScrollView?.contentView.bounds
+
+        storage.beginEditing()
+        storage.addAttribute(.font, value: baseFont, range: range)
+        storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: range)
+        storage.removeAttribute(.strikethroughStyle, range: range)
+        storage.removeAttribute(.backgroundColor, range: range)
+        HighlightingTextEditor.applyMarkdownStyling(storage: storage, baseFont: baseFont)
+        storage.endEditing()
+
+        if let savedBounds {
+            enclosingScrollView?.contentView.bounds = savedBounds
+        }
+    }
+
+    private func wrapSelection(prefix: String, suffix: String) {
+        let range = selectedRange()
+        let text = (string as NSString)
+
+        if range.length > 0 {
+            let selected = text.substring(with: range)
+            if selected.hasPrefix(prefix) && selected.hasSuffix(suffix) && selected.count > prefix.count + suffix.count {
+                let unwrapped = String(selected.dropFirst(prefix.count).dropLast(suffix.count))
+                insertText(unwrapped, replacementRange: range)
+                setSelectedRange(NSRange(location: range.location, length: unwrapped.count))
+            } else {
+                let wrapped = prefix + selected + suffix
+                insertText(wrapped, replacementRange: range)
+                setSelectedRange(NSRange(location: range.location + prefix.count, length: range.length))
+            }
+        } else {
+            insertText(prefix + suffix, replacementRange: range)
+            setSelectedRange(NSRange(location: range.location + prefix.count, length: 0))
+        }
     }
 }
 

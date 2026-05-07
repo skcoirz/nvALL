@@ -96,8 +96,7 @@ class NotesManager: ObservableObject {
                 path = fallbackPath
             }
         }
-        let ext = defaults.string(forKey: "fileExtension") ?? "md"
-        self.init(directory: URL(fileURLWithPath: path), fileExtension: ext)
+        self.init(directory: URL(fileURLWithPath: path), fileExtension: "md")
         self.cursorPositions = (defaults.dictionary(forKey: "cursorPositions") as? [String: Int]) ?? [:]
     }
 
