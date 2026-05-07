@@ -44,7 +44,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = TabTextView()
-        textView.font = NSFont.systemFont(ofSize: 13)
+        textView.font = NSFont.systemFont(ofSize: 12)
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
@@ -58,7 +58,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.textContainerInset = NSSize(width: 8, height: 8)
         textView.drawsBackground = true
-        textView.backgroundColor = .textBackgroundColor
+        textView.backgroundColor = Theme.editorBackground
+        textView.insertionPointColor = Theme.textColor
         textView.autoresizingMask = [.width, .height]
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -123,9 +124,9 @@ struct HighlightingTextEditor: NSViewRepresentable {
 
         storage.beginEditing()
 
-        let baseFont = NSFont.systemFont(ofSize: 13)
+        let baseFont = NSFont.systemFont(ofSize: 12)
         storage.addAttribute(.font, value: baseFont, range: fullRange)
-        storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: fullRange)
+        storage.addAttribute(.foregroundColor, value: Theme.textColor, range: fullRange)
         storage.removeAttribute(.strikethroughStyle, range: fullRange)
         storage.removeAttribute(.backgroundColor, range: fullRange)
 
@@ -160,7 +161,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
             let remaining = NSRange(location: searchStart, length: content.length - searchStart)
             let found = content.range(of: query, options: .caseInsensitive, range: remaining)
             if found.location == NSNotFound { break }
-            storage.addAttribute(.backgroundColor, value: NSColor.systemYellow.withAlphaComponent(0.4), range: found)
+            storage.addAttribute(.backgroundColor, value: Theme.searchHighlight, range: found)
             searchStart = found.location + found.length
         }
     }
@@ -173,7 +174,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
     static func applyMarkdownStyling(storage: NSTextStorage, baseFont: NSFont) {
         let content = storage.string as NSString
         let fullRange = NSRange(location: 0, length: content.length)
-        let markerColor = NSColor.tertiaryLabelColor
+        let markerColor = Theme.markerColor
 
         Self.boldItalicPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
             guard let match else { return }
@@ -336,12 +337,12 @@ class TabTextView: NSTextView {
         let range = NSRange(location: expandedStart, length: expandedEnd - expandedStart)
         guard range.length > 0 else { return }
 
-        let baseFont = NSFont.systemFont(ofSize: 13)
+        let baseFont = NSFont.systemFont(ofSize: 12)
         let savedBounds = enclosingScrollView?.contentView.bounds
 
         storage.beginEditing()
         storage.addAttribute(.font, value: baseFont, range: range)
-        storage.addAttribute(.foregroundColor, value: NSColor.textColor, range: range)
+        storage.addAttribute(.foregroundColor, value: Theme.textColor, range: range)
         storage.removeAttribute(.strikethroughStyle, range: range)
         storage.removeAttribute(.backgroundColor, range: range)
         HighlightingTextEditor.applyMarkdownStyling(storage: storage, baseFont: baseFont)

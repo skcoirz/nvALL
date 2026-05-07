@@ -35,7 +35,7 @@ struct NoteListView: NSViewRepresentable {
         if let headerView = tableView.headerView {
             let border = NSView()
             border.wantsLayer = true
-            border.layer?.backgroundColor = NSColor.separatorColor.cgColor
+            border.layer?.backgroundColor = Theme.borderColor.cgColor
             border.translatesAutoresizingMaskIntoConstraints = false
             headerView.addSubview(border)
             NSLayoutConstraint.activate([
@@ -46,7 +46,7 @@ struct NoteListView: NSViewRepresentable {
             ])
         }
         tableView.gridStyleMask = .solidHorizontalGridLineMask
-        tableView.gridColor = NSColor.separatorColor
+        tableView.gridColor = Theme.borderColor
         tableView.style = .plain
         tableView.target = context.coordinator
         tableView.action = #selector(Coordinator.tableViewClicked(_:))
@@ -132,8 +132,8 @@ struct NoteListView: NSViewRepresentable {
             return f
         }()
 
-        private let evenColor = NSColor.white
-        private let oddColor = NSColor(calibratedWhite: 0.94, alpha: 1.0)
+        private let evenColor = Theme.evenRowColor
+        private let oddColor = Theme.oddRowColor
 
         func numberOfRows(in tableView: NSTableView) -> Int {
             notesManager?.filteredNotes.count ?? 0
@@ -193,7 +193,7 @@ struct NoteListView: NSViewRepresentable {
                     string: title,
                     attributes: [
                         .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-                        .foregroundColor: NSColor.labelColor
+                        .foregroundColor: Theme.textColor
                     ]
                 ))
                 if !preview.isEmpty {
@@ -201,7 +201,7 @@ struct NoteListView: NSViewRepresentable {
                         string: " — " + preview,
                         attributes: [
                             .font: NSFont.systemFont(ofSize: 11),
-                            .foregroundColor: NSColor.secondaryLabelColor
+                            .foregroundColor: Theme.secondaryText
                         ]
                     ))
                 }
@@ -214,10 +214,10 @@ struct NoteListView: NSViewRepresentable {
                     string: dateFormatter.string(from: note.modifiedDate),
                     attributes: [
                         .font: NSFont.systemFont(ofSize: 10),
-                        .foregroundColor: NSColor.labelColor
+                        .foregroundColor: Theme.textColor
                     ]
                 )
-                cellView.configure(attributedString: dateStr, defaultColor: .labelColor)
+                cellView.configure(attributedString: dateStr, defaultColor: Theme.textColor)
                 return cellView
 
             default:
@@ -372,7 +372,7 @@ class AlternatingRowView: NSTableRowView {
 
     override func draw(_ dirtyRect: NSRect) {
         if isSelected {
-            NSColor.selectedContentBackgroundColor.setFill()
+            Theme.selectionColor.setFill()
         } else {
             rowColor.setFill()
         }

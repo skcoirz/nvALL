@@ -49,13 +49,13 @@ struct DraggableDivider: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Color(nsColor: .separatorColor)
+            Color(nsColor: Theme.borderColor)
                 .frame(height: 1)
-            Color(nsColor: NSColor(white: 0.98, alpha: 1.0))
+            Color(nsColor: Theme.oddRowColor)
                 .frame(height: 1)
-            Color(nsColor: .windowBackgroundColor)
+            Color(nsColor: Theme.sidebarBackground)
                 .frame(height: 5)
-            Color(nsColor: .separatorColor)
+            Color(nsColor: Theme.borderColor)
                 .frame(height: 1)
         }
         .contentShape(Rectangle())
@@ -121,11 +121,11 @@ struct SearchBarView: View {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color(nsColor: .textBackgroundColor))
+                .fill(Color(nsColor: Theme.sidebarBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(isFocused ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                .stroke(isFocused ? Color(nsColor: Theme.accentColor) : Color(nsColor: Theme.borderColor), lineWidth: 1)
         )
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
