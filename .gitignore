@@ -6,3 +6,5 @@ xcuserdata/
 DerivedData/
 .swiftpm/
 /build
+Resources/*.png
+Resources/*.iconset/
