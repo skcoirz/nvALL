@@ -20,13 +20,11 @@ func generateIcon(size: Int) -> NSImage {
         .foregroundColor: NSColor.white
     ]
     let textSize = text.size(withAttributes: attrs)
-    let textRect = NSRect(
+    let textPoint = NSPoint(
         x: (CGFloat(size) - textSize.width) / 2,
-        y: (CGFloat(size) - textSize.height) / 2 - CGFloat(size) * 0.02,
-        width: textSize.width,
-        height: textSize.height
+        y: (CGFloat(size) - textSize.height) / 2
     )
-    text.draw(in: textRect, withAttributes: attrs)
+    text.draw(at: textPoint, withAttributes: attrs)
 
     img.unlockFocus()
     return img
