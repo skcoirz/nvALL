@@ -357,7 +357,25 @@ class TabTextView: NSTextView {
 
         if range.length > 0 {
             let selected = text.substring(with: range)
-            if selected.hasPrefix(prefix) && selected.hasSuffix(suffix) && selected.count > prefix.count + suffix.count {
+            let lines = selected.components(separatedBy: "\n")
+
+            if lines.count > 1 {
+                let allWrapped = lines.allSatisfy {
+                    $0.hasPrefix(prefix) && $0.hasSuffix(suffix) && $0.count > prefix.count + suffix.count
+                }
+                let result: String
+                if allWrapped {
+                    result = lines.map { String($0.dropFirst(prefix.count).dropLast(suffix.count)) }.joined(separator: "\n")
+                } else {
+                    result = lines.map { line in
+                        if line.trimmingCharacters(in: .whitespaces).isEmpty { return line }
+                        if line.hasPrefix(prefix) && line.hasSuffix(suffix) { return line }
+                        return prefix + line + suffix
+                    }.joined(separator: "\n")
+                }
+                insertText(result, replacementRange: range)
+                setSelectedRange(NSRange(location: range.location, length: result.count))
+            } else if selected.hasPrefix(prefix) && selected.hasSuffix(suffix) && selected.count > prefix.count + suffix.count {
                 let unwrapped = String(selected.dropFirst(prefix.count).dropLast(suffix.count))
                 insertText(unwrapped, replacementRange: range)
                 setSelectedRange(NSRange(location: range.location, length: unwrapped.count))

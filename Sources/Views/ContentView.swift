@@ -7,7 +7,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SearchBarView(isSearchFocused: $isSearchFocused, notesManager: notesManager)
+            SearchBarView(isSearchFocused: $isSearchFocused)
             Divider()
             NoteListView()
                 .frame(height: listHeight)
@@ -89,9 +89,8 @@ extension View {
 }
 
 struct SearchBarView: View {
-    @EnvironmentObject var envNotesManager: NotesManager
+    @EnvironmentObject var notesManager: NotesManager
     var isSearchFocused: FocusState<Bool>.Binding
-    var notesManager: NotesManager
     @State private var now = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -115,7 +114,7 @@ struct SearchBarView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundColor(isFocused ? .accentColor : .secondary)
-            TextField("Search or create note...", text: $envNotesManager.searchText)
+            TextField("Search or create note...", text: $notesManager.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .focused(isSearchFocused)
