@@ -7,7 +7,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SearchBarView(isSearchFocused: $isSearchFocused)
+            SearchBarView(isSearchFocused: $isSearchFocused, notesManager: notesManager)
             Divider()
             NoteListView()
                 .frame(height: listHeight)
@@ -33,11 +33,19 @@ struct ContentView: View {
             return .handled
         }
         .background(
-            Button("") {
-                isSearchFocused = true
+            Group {
+                Button("") {
+                    isSearchFocused = true
+                }
+                .keyboardShortcut("l", modifiers: .command)
+                .hidden()
+
+                Button("") {
+                    notesManager.forceSave()
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .hidden()
             }
-            .keyboardShortcut("l", modifiers: .command)
-            .hidden()
         )
     }
 }
@@ -81,11 +89,25 @@ extension View {
 }
 
 struct SearchBarView: View {
-    @EnvironmentObject var notesManager: NotesManager
+    @EnvironmentObject var envNotesManager: NotesManager
     var isSearchFocused: FocusState<Bool>.Binding
+    var notesManager: NotesManager
+    @State private var now = Date()
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var isFocused: Bool {
         isSearchFocused.wrappedValue
+    }
+
+    private var saveLabel: String? {
+        if notesManager.hasUnsavedChanges { return "unsaved" }
+        guard let saved = notesManager.lastSavedDate else { return nil }
+        let seconds = Int(now.timeIntervalSince(saved))
+        if seconds < 2 { return "saved just now" }
+        if seconds < 60 { return "saved \(seconds)s ago" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "saved \(minutes)m ago" }
+        return "saved \(minutes / 60)h ago"
     }
 
     var body: some View {
@@ -93,7 +115,7 @@ struct SearchBarView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundColor(isFocused ? .accentColor : .secondary)
-            TextField("Search or create note...", text: $notesManager.searchText)
+            TextField("Search or create note...", text: $envNotesManager.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .focused(isSearchFocused)
@@ -121,7 +143,13 @@ struct SearchBarView: View {
                 }
                 .buttonStyle(.plain)
             }
+            if let label = saveLabel {
+                Text(label)
+                    .font(.system(size: 9))
+                    .foregroundColor(Color(nsColor: Theme.secondaryText))
+            }
         }
+        .onReceive(timer) { now = $0 }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
@@ -136,3 +164,4 @@ struct SearchBarView: View {
         .padding(.vertical, 5)
     }
 }
+

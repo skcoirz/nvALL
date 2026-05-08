@@ -182,12 +182,12 @@ struct HighlightingTextEditor: NSViewRepresentable {
         let fullRange = NSRange(location: 0, length: content.length)
         let markerColor = Theme.markerColor
 
+        let fm = NSFontManager.shared
         Self.boldItalicPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
             guard let match else { return }
             let inner = match.range(at: 1)
-            let boldItalicFont = NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)
-            let descriptor = boldItalicFont.fontDescriptor.withSymbolicTraits(.italic)
-            let font = NSFont(descriptor: descriptor, size: baseFont.pointSize) ?? boldItalicFont
+            let boldFont = NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)
+            let font = fm.convert(boldFont, toHaveTrait: .italicFontMask)
             storage.addAttribute(.font, value: font, range: inner)
             let markerStart = NSRange(location: match.range.location, length: 3)
             let markerEnd = NSRange(location: match.range.location + match.range.length - 3, length: 3)
@@ -208,8 +208,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         Self.italicPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
             guard let match else { return }
             let inner = match.range(at: 1)
-            let descriptor = baseFont.fontDescriptor.withSymbolicTraits(.italic)
-            let italicFont = NSFont(descriptor: descriptor, size: baseFont.pointSize) ?? baseFont
+            let italicFont = fm.convert(baseFont, toHaveTrait: .italicFontMask)
             storage.addAttribute(.font, value: italicFont, range: inner)
             let markerStart = NSRange(location: match.range.location, length: 1)
             let markerEnd = NSRange(location: match.range.location + match.range.length - 1, length: 1)

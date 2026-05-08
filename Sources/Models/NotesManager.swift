@@ -7,6 +7,8 @@ class NotesManager: ObservableObject {
     @Published var selectedNoteID: UUID?
     @Published var editorContent: String = ""
     @Published var pendingCursorPosition: Int?
+    @Published var lastSavedDate: Date?
+    @Published var hasUnsavedChanges: Bool = false
 
     var notesDirectory: URL
     var fileExtension: String
@@ -168,9 +170,16 @@ class NotesManager: ObservableObject {
         loadedContent = editorContent
         try? editorContent.write(to: notes[index].fileURL, atomically: true, encoding: .utf8)
         searchIndex.update(note: notes[index])
+        lastSavedDate = Date()
+        hasUnsavedChanges = false
+    }
+
+    func forceSave() {
+        saveCurrentNote()
     }
 
     func scheduleSave() {
+        hasUnsavedChanges = true
         saveTask?.cancel()
         let task = DispatchWorkItem { [weak self] in
             self?.saveCurrentNote()
