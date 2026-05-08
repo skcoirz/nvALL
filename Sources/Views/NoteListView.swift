@@ -87,6 +87,7 @@ struct NoteListView: NSViewRepresentable {
             if tableView.selectedRow != index {
                 coordinator.suppressSelectionChange = true
                 tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+                tableView.scrollRowToVisible(index)
                 coordinator.suppressSelectionChange = false
             }
         }

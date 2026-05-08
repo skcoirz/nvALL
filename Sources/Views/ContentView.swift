@@ -97,6 +97,11 @@ struct SearchBarView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .focused(isSearchFocused)
+                .onChange(of: notesManager.searchText) { _, _ in
+                    notesManager.saveCurrentNote()
+                    notesManager.selectedNoteID = nil
+                    notesManager.editorContent = ""
+                }
                 .onSubmit {
                     notesManager.createOrSelectFromSearch()
                 }

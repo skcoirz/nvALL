@@ -69,7 +69,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .legacy
+        scrollView.autohidesScrollers = false
 
         context.coordinator.textView = textView
         return scrollView
@@ -98,6 +99,11 @@ struct HighlightingTextEditor: NSViewRepresentable {
             Self.applyMarkdownAndHighlights(textView: textView, searchText: searchText)
             coordinator.lastAppliedSearch = searchText
             coordinator.isUpdatingText = false
+            if !searchText.isEmpty {
+                DispatchQueue.main.async {
+                    self.updateScrollbarMarks(textView: textView, scrollView: scrollView)
+                }
+            }
         }
 
         if searchText != coordinator.lastAppliedSearch {
@@ -223,9 +229,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
     }
 
     private func updateScrollbarMarks(textView: NSTextView, scrollView: NSScrollView) {
-        for sub in scrollView.subviews where sub is ScrollbarMarksView {
-            sub.removeFromSuperview()
-        }
+        scrollView.verticalScroller?.subviews.filter { $0 is ScrollbarMarksView }.forEach { $0.removeFromSuperview() }
         guard !searchText.isEmpty,
               let layoutManager = textView.layoutManager,
               let textContainer = textView.textContainer else { return }
@@ -252,17 +256,12 @@ struct HighlightingTextEditor: NSViewRepresentable {
             searchStart = found.location + found.length
         }
 
-        guard !positions.isEmpty else { return }
-        let markerWidth: CGFloat = 12
+        guard !positions.isEmpty,
+              let scroller = scrollView.verticalScroller else { return }
         let overlay = ScrollbarMarksView(positions: positions)
-        overlay.frame = NSRect(
-            x: scrollView.bounds.width - markerWidth,
-            y: 0,
-            width: markerWidth,
-            height: scrollView.bounds.height
-        )
-        overlay.autoresizingMask = [.minXMargin, .height]
-        scrollView.addSubview(overlay)
+        overlay.frame = scroller.bounds
+        overlay.autoresizingMask = [.width, .height]
+        scroller.addSubview(overlay)
     }
 
     class Coordinator: NSObject, NSTextViewDelegate {
@@ -386,12 +385,20 @@ class ScrollbarMarksView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var isFlipped: Bool { true }
+    override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.systemOrange.withAlphaComponent(0.8).setFill()
+        let trackRect: NSRect
+        if let scroller = superview as? NSScroller {
+            trackRect = scroller.rect(for: .knobSlot)
+        } else {
+            trackRect = bounds
+        }
+
+        Theme.searchHighlight.setFill()
         for pos in positions {
-            let y = pos * bounds.height
-            let mark = NSRect(x: 0, y: y - 1, width: bounds.width, height: 2)
+            let y = trackRect.origin.y + pos * trackRect.height
+            let mark = NSRect(x: trackRect.origin.x, y: y - 1, width: trackRect.width, height: 3)
             mark.fill()
         }
     }

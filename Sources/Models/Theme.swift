@@ -23,6 +23,6 @@ enum Theme {
     static let evenRowColor = NSColor(hex: "#1e1e1e")
     static let oddRowColor = NSColor(hex: "#252526")
     static let markerColor = NSColor(hex: "#585858")
-    static let searchHighlight = NSColor(hex: "#623800")
+    static let searchHighlight = NSColor(hex: "#b8860b")
     static let accentColor = NSColor(hex: "#0078d4")
 }
