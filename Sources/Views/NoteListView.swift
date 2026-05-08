@@ -189,15 +189,23 @@ struct NoteListView: NSViewRepresentable {
                     .replacingOccurrences(of: "\n", with: " ")
                     .trimmingCharacters(in: .whitespaces)
 
+                let fileName = note.fileURL.lastPathComponent
+                let isAIFile = AIConversationManager.isAIFile(fileName)
+                let isInstructions = AIConversationManager.isInstructionsFile(fileName)
+                let titleColor = isInstructions ? Theme.accentColor
+                    : isAIFile ? NSColor(hex: "#6a9955")
+                    : Theme.textColor
+
                 let attributed = NSMutableAttributedString()
+                let displayTitle = isAIFile ? "💬 \(title)" : title
                 attributed.append(NSAttributedString(
-                    string: title,
+                    string: isInstructions ? "⚙️ \(title)" : displayTitle,
                     attributes: [
                         .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-                        .foregroundColor: Theme.textColor
+                        .foregroundColor: titleColor
                     ]
                 ))
-                if !preview.isEmpty {
+                if !preview.isEmpty && !isAIFile {
                     attributed.append(NSAttributedString(
                         string: " — " + preview,
                         attributes: [
@@ -206,7 +214,7 @@ struct NoteListView: NSViewRepresentable {
                         ]
                     ))
                 }
-                cellView.configure(attributedString: attributed, defaultColor: .labelColor)
+                cellView.configure(attributedString: attributed, defaultColor: titleColor)
                 return cellView
 
             case "date":
@@ -261,6 +269,11 @@ struct NoteListView: NSViewRepresentable {
 
             let note = manager.filteredNotes[row]
             let versions = manager.versionManager.listVersions(of: note)
+
+            let renameItem = NSMenuItem(title: "Rename...", action: #selector(renameNoteAction(_:)), keyEquivalent: "")
+            renameItem.target = self
+            renameItem.representedObject = note.id
+            menu.addItem(renameItem)
 
             let deleteItem = NSMenuItem(title: "Delete Note", action: #selector(deleteNoteAction(_:)), keyEquivalent: "")
             deleteItem.target = self
@@ -326,6 +339,29 @@ struct NoteListView: NSViewRepresentable {
                   let manager = notesManager,
                   let note = manager.notes.first(where: { $0.id == noteID }) else { return }
             manager.deleteNote(note)
+        }
+
+        @objc func renameNoteAction(_ sender: NSMenuItem) {
+            guard let noteID = sender.representedObject as? UUID,
+                  let manager = notesManager,
+                  let note = manager.notes.first(where: { $0.id == noteID }) else { return }
+
+            let alert = NSAlert()
+            alert.messageText = "Rename Note"
+            alert.informativeText = "Enter a new name:"
+            alert.addButton(withTitle: "Rename")
+            alert.addButton(withTitle: "Cancel")
+
+            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+            input.stringValue = note.title
+            alert.accessoryView = input
+            alert.window.initialFirstResponder = input
+
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            let newName = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !newName.isEmpty, newName != note.title else { return }
+
+            manager.renameNote(note, to: newName)
         }
 
         @objc func revertAction(_ sender: NSMenuItem) {

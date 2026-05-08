@@ -14,6 +14,7 @@ class NotesManager: ObservableObject {
     var fileExtension: String
     var versionManager: VersionManager!
     var searchIndex: SearchIndex!
+    var aiConversationManager: AIConversationManager!
     private var saveTask: DispatchWorkItem?
     private var loadedContent: String = ""
     private var cursorPositions: [String: Int] = [:]
@@ -105,6 +106,7 @@ class NotesManager: ObservableObject {
         try? FileManager.default.createDirectory(at: notesDirectory, withIntermediateDirectories: true)
         self.versionManager = VersionManager(notesDirectory: notesDirectory)
         self.searchIndex = SearchIndex(notesDirectory: notesDirectory)
+        self.aiConversationManager = AIConversationManager(notesDirectory: notesDirectory)
         loadNotes()
         searchIndex.rebuild(from: notes)
     }
@@ -213,6 +215,18 @@ class NotesManager: ObservableObject {
         loadedContent = content
         editorContent = content
         return note
+    }
+
+    func renameNote(_ note: Note, to newName: String) {
+        guard let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
+        let ext = note.fileURL.pathExtension
+        let newURL = note.fileURL.deletingLastPathComponent().appendingPathComponent("\(newName).\(ext)")
+        guard !FileManager.default.fileExists(atPath: newURL.path) else { return }
+        searchIndex.delete(path: note.fileURL.path)
+        try? FileManager.default.moveItem(at: note.fileURL, to: newURL)
+        notes[index].title = newName
+        notes[index].fileURL = newURL
+        searchIndex.update(note: notes[index])
     }
 
     func deleteNote(_ note: Note) {

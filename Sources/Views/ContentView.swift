@@ -2,26 +2,56 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var notesManager: NotesManager
+    @StateObject private var aiAssistant = AIAssistant()
     @FocusState private var isSearchFocused: Bool
     @State private var listHeight: CGFloat = 140
 
     var body: some View {
         VStack(spacing: 0) {
-            SearchBarView(isSearchFocused: $isSearchFocused)
+            SearchBarView(isSearchFocused: $isSearchFocused, aiAssistant: aiAssistant)
             Divider()
-            NoteListView()
-                .frame(height: listHeight)
-            DraggableDivider(position: $listHeight, minPosition: 60, maxPosition: 300)
-            EditorView()
-                .frame(minHeight: 100)
+            if !aiAssistant.isActive {
+                NoteListView()
+                    .frame(height: listHeight)
+                DraggableDivider(position: $listHeight, minPosition: 60, maxPosition: 300)
+                EditorView()
+                    .frame(minHeight: 100)
+            } else {
+                AIChatView(assistant: aiAssistant)
+                    .frame(minHeight: 200)
+            }
         }
         .frame(minWidth: 400, minHeight: 350)
         .onAppear {
             isSearchFocused = true
+            aiAssistant.conversationManager = notesManager.aiConversationManager
+            aiAssistant.onConversationSaved = { [weak notesManager] in
+                notesManager?.loadNotes()
+                notesManager?.searchIndex.rebuild(from: notesManager?.notes ?? [])
+            }
+        }
+        .onChange(of: notesManager.selectedNoteID) { _, newID in
+            guard let newID,
+                  let note = notesManager.notes.first(where: { $0.id == newID }),
+                  AIConversationManager.isChatFile(note.fileURL.lastPathComponent) else { return }
+            aiAssistant.loadFromFile(note.fileURL)
+        }
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.keyCode == 53, aiAssistant.isActive {
+                    aiAssistant.pause()
+                    isSearchFocused = true
+                    return nil
+                }
+                return event
+            }
         }
         .onKeyPress(.escape) {
             NotificationCenter.default.post(name: .searchBarFocused, object: nil)
-            if !isSearchFocused {
+            if aiAssistant.isActive {
+                aiAssistant.pause()
+                isSearchFocused = true
+            } else if !isSearchFocused {
                 isSearchFocused = true
             } else if !notesManager.searchText.isEmpty {
                 notesManager.searchText = ""
@@ -101,6 +131,7 @@ extension View {
 struct SearchBarView: View {
     @EnvironmentObject var notesManager: NotesManager
     var isSearchFocused: FocusState<Bool>.Binding
+    @ObservedObject var aiAssistant: AIAssistant
     @State private var now = Date()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -124,17 +155,39 @@ struct SearchBarView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12))
                 .foregroundColor(isFocused ? .accentColor : .secondary)
-            TextField("Search or create note...", text: $notesManager.searchText)
+            TextField(aiAssistant.isActive ? "Ask AI follow-up..." : "Search or create note... (? to ask AI)", text: $notesManager.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .focused(isSearchFocused)
-                .onChange(of: notesManager.searchText) { _, _ in
-                    notesManager.saveCurrentNote()
-                    notesManager.selectedNoteID = nil
-                    notesManager.editorContent = ""
+                .onChange(of: notesManager.searchText) { _, newValue in
+                    if !newValue.hasPrefix("?") && !aiAssistant.isActive {
+                        notesManager.saveCurrentNote()
+                        notesManager.selectedNoteID = nil
+                        notesManager.editorContent = ""
+                    }
                 }
                 .onSubmit {
-                    notesManager.createOrSelectFromSearch()
+                    let text = notesManager.searchText.trimmingCharacters(in: .whitespaces)
+                    if text.hasPrefix("?") || aiAssistant.isActive {
+                        let question = text.hasPrefix("?")
+                            ? String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+                            : text
+                        guard !question.isEmpty else { return }
+                        if !aiAssistant.isActive {
+                            aiAssistant.reset()
+                            aiAssistant.isActive = true
+                        }
+                        let keywords = question.components(separatedBy: " ").prefix(5).joined(separator: " ")
+                        let matchedPaths = notesManager.searchIndex.search(query: keywords)
+                        let context = matchedPaths.prefix(5).compactMap { path -> String? in
+                            guard let note = notesManager.notes.first(where: { $0.fileURL.path == path }) else { return nil }
+                            return "=== \(note.title) ===\n\(String(note.content.prefix(2000)))"
+                        }.joined(separator: "\n\n")
+                        aiAssistant.ask(question: question, noteContext: context)
+                        notesManager.searchText = ""
+                    } else {
+                        notesManager.createOrSelectFromSearch()
+                    }
                 }
                 .onKeyPress(.downArrow) {
                     notesManager.selectNextNote()
