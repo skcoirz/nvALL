@@ -319,10 +319,85 @@ class TabTextView: NSTextView {
                 wrapSelection(prefix: "~~", suffix: "~~")
                 refreshMarkdown()
                 return
+            case "]":
+                indentSelection(indent: true)
+                return
+            case "[":
+                indentSelection(indent: false)
+                return
             default: break
             }
         }
         super.keyDown(with: event)
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        let text = (string as NSString)
+        let cursorPos = selectedRange().location
+        let lineRange = text.lineRange(for: NSRange(location: max(cursorPos - 1, 0), length: 0))
+        let currentLine = text.substring(with: lineRange)
+
+        var leadingWhitespace = ""
+        for ch in currentLine {
+            if ch == " " || ch == "\t" { leadingWhitespace.append(ch) }
+            else { break }
+        }
+
+        let trimmed = currentLine.trimmingCharacters(in: .whitespaces)
+        var prefix = ""
+        if trimmed.hasPrefix("- ") {
+            prefix = "- "
+        } else if trimmed.hasPrefix("* ") && !trimmed.hasPrefix("**") {
+            prefix = "* "
+        } else if let match = trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) {
+            let num = (Int(trimmed[match].trimmingCharacters(in: .punctuationCharacters).trimmingCharacters(in: .whitespaces)) ?? 0) + 1
+            prefix = "\(num). "
+        }
+
+        insertText("\n" + leadingWhitespace + prefix, replacementRange: selectedRange())
+    }
+
+    private func indentSelection(indent: Bool) {
+        let text = (string as NSString)
+        let range = selectedRange()
+        let lineRange = text.lineRange(for: range)
+        let lines = text.substring(with: lineRange).components(separatedBy: "\n")
+
+        var totalShift = 0
+        var firstLineShift = 0
+        var result: [String] = []
+        for (i, line) in lines.enumerated() {
+            if i == lines.count - 1 && line.isEmpty { result.append(line); continue }
+            if indent {
+                result.append("  " + line)
+                if i == 0 { firstLineShift = 2 }
+                totalShift += 2
+            } else {
+                if line.hasPrefix("  ") {
+                    result.append(String(line.dropFirst(2)))
+                    if i == 0 { firstLineShift = -2 }
+                    totalShift -= 2
+                } else if line.hasPrefix(" ") {
+                    result.append(String(line.dropFirst(1)))
+                    if i == 0 { firstLineShift = -1 }
+                    totalShift -= 1
+                } else {
+                    result.append(line)
+                }
+            }
+        }
+
+        let replacement = result.joined(separator: "\n")
+        insertText(replacement, replacementRange: lineRange)
+
+        if range.length == 0 {
+            let newPos = max(0, range.location + firstLineShift)
+            setSelectedRange(NSRange(location: newPos, length: 0))
+        } else {
+            let newStart = max(0, range.location + firstLineShift)
+            let newLength = max(0, range.length + totalShift - firstLineShift)
+            setSelectedRange(NSRange(location: newStart, length: newLength))
+        }
     }
 
     private func refreshMarkdown() {
