@@ -45,6 +45,16 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("s", modifiers: .command)
                 .hidden()
+
+                Button("") {
+                    let title = notesManager.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !title.isEmpty {
+                        notesManager.createNote(title: title)
+                        notesManager.searchText = ""
+                    }
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .hidden()
             }
         )
     }
