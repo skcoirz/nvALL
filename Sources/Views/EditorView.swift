@@ -284,6 +284,8 @@ struct HighlightingTextEditor: NSViewRepresentable {
             parent.onSaveCursor(pos)
         }
 
+        private var lineRefreshTask: DispatchWorkItem?
+
         func textDidChange(_ notification: Notification) {
             guard !isUpdatingText,
                   let textView = notification.object as? NSTextView else { return }
@@ -291,6 +293,35 @@ struct HighlightingTextEditor: NSViewRepresentable {
             parent.text = textView.string
             parent.onTextChange()
             isUpdatingText = false
+            scheduleLineRefresh(textView: textView)
+        }
+
+        private func scheduleLineRefresh(textView: NSTextView) {
+            lineRefreshTask?.cancel()
+            let task = DispatchWorkItem { [weak textView] in
+                guard let textView, let storage = textView.textStorage else { return }
+                let text = storage.string as NSString
+                guard text.length > 0 else { return }
+                let cursor = min(textView.selectedRange().location, max(text.length - 1, 0))
+                let lineRange = text.lineRange(for: NSRange(location: cursor, length: 0))
+                guard lineRange.length > 0 else { return }
+
+                let baseFont = NSFont.systemFont(ofSize: 12)
+                let savedBounds = textView.enclosingScrollView?.contentView.bounds
+
+                storage.beginEditing()
+                storage.addAttribute(.font, value: baseFont, range: lineRange)
+                storage.addAttribute(.foregroundColor, value: Theme.textColor, range: lineRange)
+                storage.removeAttribute(.strikethroughStyle, range: lineRange)
+                HighlightingTextEditor.applyMarkdownStyling(storage: storage, baseFont: baseFont)
+                storage.endEditing()
+
+                if let savedBounds {
+                    textView.enclosingScrollView?.contentView.bounds = savedBounds
+                }
+            }
+            lineRefreshTask = task
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: task)
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -459,10 +490,45 @@ class TabTextView: NSTextView {
                 insertText(wrapped, replacementRange: range)
                 setSelectedRange(NSRange(location: range.location + prefix.count, length: range.length))
             }
+        } else if let found = findSurroundingMarkers(at: range.location, prefix: prefix, suffix: suffix) {
+            let inner = text.substring(with: NSRange(location: found.start + prefix.count, length: found.end - found.start - prefix.count - suffix.count))
+            let fullRange = NSRange(location: found.start, length: found.end - found.start)
+            insertText(inner, replacementRange: fullRange)
+            setSelectedRange(NSRange(location: found.start + (range.location - found.start - prefix.count), length: 0))
         } else {
             insertText(prefix + suffix, replacementRange: range)
             setSelectedRange(NSRange(location: range.location + prefix.count, length: 0))
         }
+    }
+
+    private func findSurroundingMarkers(at cursor: Int, prefix: String, suffix: String) -> (start: Int, end: Int)? {
+        let text = string
+        let nsText = text as NSString
+        let lineRange = nsText.lineRange(for: NSRange(location: cursor, length: 0))
+        let line = nsText.substring(with: lineRange)
+
+        let pattern: String
+        if prefix == "**" && suffix == "**" {
+            pattern = "\\*\\*(.+?)\\*\\*"
+        } else if prefix == "*" && suffix == "*" {
+            pattern = "(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)"
+        } else if prefix == "~~" && suffix == "~~" {
+            pattern = "~~(.+?)~~"
+        } else {
+            return nil
+        }
+
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let matches = regex.matches(in: line, range: NSRange(location: 0, length: line.count))
+
+        for match in matches {
+            let absStart = lineRange.location + match.range.location
+            let absEnd = absStart + match.range.length
+            if cursor > absStart && cursor < absEnd {
+                return (absStart, absEnd)
+            }
+        }
+        return nil
     }
 }
 
