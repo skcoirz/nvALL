@@ -84,6 +84,7 @@ final class NotesManagerTests: XCTestCase {
         try! "Swift programming guide".write(to: tempDir.appendingPathComponent("swift.md"), atomically: true, encoding: .utf8)
         try! "Python basics".write(to: tempDir.appendingPathComponent("python.md"), atomically: true, encoding: .utf8)
         manager.loadNotes()
+        manager.searchIndex.rebuild(from: manager.notes)
         manager.searchText = "swift"
         let filtered = manager.filteredNotes
         XCTAssertEqual(filtered.first?.title, "swift")
@@ -94,6 +95,7 @@ final class NotesManagerTests: XCTestCase {
         try! "content".write(to: tempDir.appendingPathComponent("hello.md"), atomically: true, encoding: .utf8)
         try! "hello world".write(to: tempDir.appendingPathComponent("other.md"), atomically: true, encoding: .utf8)
         manager.loadNotes()
+        manager.searchIndex.rebuild(from: manager.notes)
         manager.searchText = "hello"
         let filtered = manager.filteredNotes
         XCTAssertEqual(filtered.first?.title, "hello")

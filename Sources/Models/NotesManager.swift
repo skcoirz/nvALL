@@ -11,6 +11,7 @@ class NotesManager: ObservableObject {
     var notesDirectory: URL
     var fileExtension: String
     var versionManager: VersionManager!
+    var searchIndex: SearchIndex!
     private var saveTask: DispatchWorkItem?
     private var loadedContent: String = ""
     private var cursorPositions: [String: Int] = [:]
@@ -26,17 +27,13 @@ class NotesManager: ObservableObject {
         if searchText.isEmpty {
             result = notes.sorted { $0.modifiedDate > $1.modifiedDate }
         } else {
-            let query = searchText.lowercased()
-            result = notes
-                .map { note -> (Note, Double) in
-                    let score = searchScore(note: note, query: query)
-                    return (note, score)
-                }
-                .sorted { a, b in
-                    if a.1 != b.1 { return a.1 > b.1 }
-                    return a.0.modifiedDate > b.0.modifiedDate
-                }
-                .map { $0.0 }
+            let rankedPaths = searchIndex.search(query: searchText)
+            let pathToNote = Dictionary(notes.map { ($0.fileURL.path, $0) }, uniquingKeysWith: { first, _ in first })
+            let matched = rankedPaths.compactMap { pathToNote[$0] }
+            let matchedSet = Set(rankedPaths)
+            let unmatched = notes.filter { !matchedSet.contains($0.fileURL.path) }
+                .sorted { $0.modifiedDate > $1.modifiedDate }
+            result = matched + unmatched
         }
         cachedFilteredNotes = result
         lastSearchText = searchText
@@ -105,35 +102,9 @@ class NotesManager: ObservableObject {
         self.fileExtension = fileExtension
         try? FileManager.default.createDirectory(at: notesDirectory, withIntermediateDirectories: true)
         self.versionManager = VersionManager(notesDirectory: notesDirectory)
+        self.searchIndex = SearchIndex(notesDirectory: notesDirectory)
         loadNotes()
-    }
-
-    private func searchScore(note: Note, query: String) -> Double {
-        var score = 0.0
-        let title = note.title.lowercased()
-        let content = note.content.lowercased()
-
-        if title == query { score += 100 }
-        else if title.hasPrefix(query) { score += 80 }
-        else if title.contains(query) { score += 60 }
-
-        let words = query.split(separator: " ").map { $0.lowercased() }
-        let titleWordMatches = words.filter { title.contains($0) }.count
-        if titleWordMatches > 0 && score == 0 {
-            score += Double(titleWordMatches) / Double(words.count) * 40
-        }
-
-        if content.contains(query) {
-            let occurrences = content.components(separatedBy: query).count - 1
-            score += min(Double(occurrences) * 5, 30)
-        }
-
-        let contentWordMatches = words.filter { content.contains($0) }.count
-        if contentWordMatches > 0 {
-            score += Double(contentWordMatches) / Double(words.count) * 20
-        }
-
-        return score
+        searchIndex.rebuild(from: notes)
     }
 
     func loadNotes() {
@@ -196,6 +167,7 @@ class NotesManager: ObservableObject {
         notes[index].modifiedDate = Date()
         loadedContent = editorContent
         try? editorContent.write(to: notes[index].fileURL, atomically: true, encoding: .utf8)
+        searchIndex.update(note: notes[index])
     }
 
     func scheduleSave() {
@@ -227,6 +199,7 @@ class NotesManager: ObservableObject {
 
         let note = Note(id: UUID(), title: fileName, content: content, fileURL: fileURL, modifiedDate: Date())
         notes.insert(note, at: 0)
+        searchIndex.update(note: note)
         selectedNoteID = note.id
         loadedContent = content
         editorContent = content
@@ -234,6 +207,7 @@ class NotesManager: ObservableObject {
     }
 
     func deleteNote(_ note: Note) {
+        searchIndex.delete(path: note.fileURL.path)
         try? FileManager.default.removeItem(at: note.fileURL)
         notes.removeAll { $0.id == note.id }
         if selectedNoteID == note.id {
