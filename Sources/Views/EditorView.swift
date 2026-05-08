@@ -80,7 +80,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         let coordinator = context.coordinator
         let textView = scrollView.documentView as! NSTextView
 
-        if coordinator.isUpdatingText { return }
+        if coordinator.isUpdatingText || textView.hasMarkedText() { return }
 
         if textView.string != text {
             coordinator.isUpdatingText = true
@@ -289,6 +289,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard !isUpdatingText,
                   let textView = notification.object as? NSTextView else { return }
+            guard !textView.hasMarkedText() else { return }
             isUpdatingText = true
             parent.text = textView.string
             parent.onTextChange()
