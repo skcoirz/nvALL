@@ -66,6 +66,9 @@ cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
+echo "Signing app..."
+codesign --force --deep --sign - "$APP_DIR"
+
 echo "Installing to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 rm -rf "$INSTALL_DIR/$APP_NAME.app"
