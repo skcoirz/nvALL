@@ -60,9 +60,11 @@ struct HighlightingTextEditor: NSViewRepresentable {
         textView.drawsBackground = true
         textView.backgroundColor = Theme.editorBackground
         textView.insertionPointColor = Theme.textColor
-        textView.autoresizingMask = [.width, .height]
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
 
         let scrollView = NSScrollView()
@@ -71,6 +73,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.scrollerStyle = .legacy
         scrollView.autohidesScrollers = false
+        scrollView.contentView.postsBoundsChangedNotifications = true
 
         context.coordinator.textView = textView
         return scrollView
@@ -124,8 +127,6 @@ struct HighlightingTextEditor: NSViewRepresentable {
         let fullRange = NSRange(location: 0, length: storage.length)
         guard fullRange.length > 0 else { return }
 
-        let scrollView = textView.enclosingScrollView
-        let visibleRect = scrollView?.contentView.bounds
         let selectedRanges = textView.selectedRanges
 
         storage.beginEditing()
@@ -135,15 +136,13 @@ struct HighlightingTextEditor: NSViewRepresentable {
         storage.addAttribute(.foregroundColor, value: Theme.textColor, range: fullRange)
         storage.removeAttribute(.strikethroughStyle, range: fullRange)
         storage.removeAttribute(.backgroundColor, range: fullRange)
+        storage.removeAttribute(.underlineStyle, range: fullRange)
 
         applyMarkdownStyling(storage: storage, baseFont: baseFont)
         applySearchHighlightsToStorage(storage: storage, searchText: searchText)
 
         storage.endEditing()
 
-        if let visibleRect {
-            scrollView?.contentView.bounds = visibleRect
-        }
         textView.selectedRanges = selectedRanges
     }
 
@@ -315,18 +314,14 @@ struct HighlightingTextEditor: NSViewRepresentable {
                 guard lineRange.length > 0 else { return }
 
                 let baseFont = NSFont.systemFont(ofSize: 12)
-                let savedBounds = textView.enclosingScrollView?.contentView.bounds
 
                 storage.beginEditing()
                 storage.addAttribute(.font, value: baseFont, range: lineRange)
                 storage.addAttribute(.foregroundColor, value: Theme.textColor, range: lineRange)
                 storage.removeAttribute(.strikethroughStyle, range: lineRange)
+                storage.removeAttribute(.underlineStyle, range: lineRange)
                 HighlightingTextEditor.applyMarkdownStyling(storage: storage, baseFont: baseFont)
                 storage.endEditing()
-
-                if let savedBounds {
-                    textView.enclosingScrollView?.contentView.bounds = savedBounds
-                }
             }
             lineRefreshTask = task
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: task)
@@ -451,19 +446,15 @@ class TabTextView: NSTextView {
         guard range.length > 0 else { return }
 
         let baseFont = NSFont.systemFont(ofSize: 12)
-        let savedBounds = enclosingScrollView?.contentView.bounds
 
         storage.beginEditing()
         storage.addAttribute(.font, value: baseFont, range: range)
         storage.addAttribute(.foregroundColor, value: Theme.textColor, range: range)
         storage.removeAttribute(.strikethroughStyle, range: range)
         storage.removeAttribute(.backgroundColor, range: range)
+        storage.removeAttribute(.underlineStyle, range: range)
         HighlightingTextEditor.applyMarkdownStyling(storage: storage, baseFont: baseFont)
         storage.endEditing()
-
-        if let savedBounds {
-            enclosingScrollView?.contentView.bounds = savedBounds
-        }
     }
 
     private func wrapSelection(prefix: String, suffix: String) {
