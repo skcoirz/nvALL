@@ -176,6 +176,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
     private static let italicPattern = try! NSRegularExpression(pattern: "(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)", options: [])
     private static let boldItalicPattern = try! NSRegularExpression(pattern: "\\*\\*\\*(.+?)\\*\\*\\*", options: [])
     private static let strikethroughPattern = try! NSRegularExpression(pattern: "~~(.+?)~~", options: [])
+    private static let urlPattern = try! NSRegularExpression(pattern: "https?://[^\\s<>\"'\\)\\]]+", options: [])
 
     static func applyMarkdownStyling(storage: NSTextStorage, baseFont: NSFont) {
         let content = storage.string as NSString
@@ -224,6 +225,12 @@ struct HighlightingTextEditor: NSViewRepresentable {
             let markerEnd = NSRange(location: match.range.location + match.range.length - 2, length: 2)
             storage.addAttribute(.foregroundColor, value: markerColor, range: markerStart)
             storage.addAttribute(.foregroundColor, value: markerColor, range: markerEnd)
+        }
+
+        Self.urlPattern.enumerateMatches(in: storage.string, range: fullRange) { match, _, _ in
+            guard let match else { return }
+            storage.addAttribute(.foregroundColor, value: Theme.accentColor, range: match.range)
+            storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: match.range)
         }
     }
 
@@ -328,6 +335,7 @@ struct HighlightingTextEditor: NSViewRepresentable {
         func textDidBeginEditing(_ notification: Notification) {
             NotificationCenter.default.post(name: .editorDidFocus, object: nil)
         }
+
     }
 }
 

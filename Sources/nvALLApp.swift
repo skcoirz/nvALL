@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         NSApp.appearance = NSAppearance(named: .darkAqua)
+
     }
 }
 
