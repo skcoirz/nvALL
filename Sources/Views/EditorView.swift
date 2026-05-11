@@ -314,13 +314,63 @@ struct HighlightingTextEditor: NSViewRepresentable {
                 guard lineRange.length > 0 else { return }
 
                 let baseFont = NSFont.systemFont(ofSize: 12)
+                let markerColor = Theme.markerColor
+                let fm = NSFontManager.shared
 
                 storage.beginEditing()
                 storage.addAttribute(.font, value: baseFont, range: lineRange)
                 storage.addAttribute(.foregroundColor, value: Theme.textColor, range: lineRange)
                 storage.removeAttribute(.strikethroughStyle, range: lineRange)
                 storage.removeAttribute(.underlineStyle, range: lineRange)
-                HighlightingTextEditor.applyMarkdownStyling(storage: storage, baseFont: baseFont)
+
+                let line = text.substring(with: lineRange)
+                let localRange = NSRange(location: 0, length: line.count)
+
+                let patterns: [(NSRegularExpression, (NSMutableAttributedString, NSTextCheckingResult) -> Void)] = [
+                    (HighlightingTextEditor.boldItalicPattern, { s, m in
+                        let boldFont = NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)
+                        s.addAttribute(.font, value: fm.convert(boldFont, toHaveTrait: .italicFontMask), range: m.range(at: 1))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location, length: 3))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location + m.range.length - 3, length: 3))
+                    }),
+                    (HighlightingTextEditor.boldPattern, { s, m in
+                        s.addAttribute(.font, value: NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold), range: m.range(at: 1))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location, length: 2))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location + m.range.length - 2, length: 2))
+                    }),
+                    (HighlightingTextEditor.italicPattern, { s, m in
+                        s.addAttribute(.font, value: fm.convert(baseFont, toHaveTrait: .italicFontMask), range: m.range(at: 1))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location, length: 1))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location + m.range.length - 1, length: 1))
+                    }),
+                    (HighlightingTextEditor.strikethroughPattern, { s, m in
+                        s.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: m.range(at: 1))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location, length: 2))
+                        s.addAttribute(.foregroundColor, value: markerColor, range: NSRange(location: m.range.location + m.range.length - 2, length: 2))
+                    }),
+                    (HighlightingTextEditor.urlPattern, { s, m in
+                        s.addAttribute(.foregroundColor, value: Theme.accentColor, range: m.range)
+                        s.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: m.range)
+                    }),
+                ]
+
+                let lineAttr = NSMutableAttributedString(string: line, attributes: [
+                    .font: baseFont, .foregroundColor: Theme.textColor
+                ])
+                for (regex, apply) in patterns {
+                    regex.enumerateMatches(in: line, range: localRange) { match, _, _ in
+                        guard let match else { return }
+                        apply(lineAttr, match)
+                    }
+                }
+                for key: NSAttributedString.Key in [.font, .foregroundColor, .strikethroughStyle, .underlineStyle] {
+                    lineAttr.enumerateAttribute(key, in: localRange) { value, range, _ in
+                        guard let value else { return }
+                        let absRange = NSRange(location: lineRange.location + range.location, length: range.length)
+                        storage.addAttribute(key, value: value, range: absRange)
+                    }
+                }
+
                 storage.endEditing()
             }
             lineRefreshTask = task
@@ -336,6 +386,22 @@ struct HighlightingTextEditor: NSViewRepresentable {
 
 class TabTextView: NSTextView {
     override func insertTab(_ sender: Any?) {
+        let text = (string as NSString)
+        let cursor = selectedRange().location
+        let lineRange = text.lineRange(for: NSRange(location: max(cursor - 1, 0), length: 0))
+        let line = text.substring(with: lineRange).trimmingCharacters(in: .newlines)
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+        if trimmed == "-" || trimmed == "*" || trimmed.range(of: #"^\d+\.$"#, options: .regularExpression) != nil {
+            let rawLine = text.substring(with: lineRange)
+            let hasNewline = rawLine.hasSuffix("\n")
+            let indented = "  " + line + (hasNewline ? "\n" : "")
+            insertText(indented, replacementRange: lineRange)
+            let newCursor = lineRange.location + indented.count - (hasNewline ? 1 : 0)
+            setSelectedRange(NSRange(location: newCursor, length: 0))
+            return
+        }
+
         insertText("  ", replacementRange: selectedRange())
     }
 
@@ -354,13 +420,15 @@ class TabTextView: NSTextView {
                 wrapSelection(prefix: "~~", suffix: "~~")
                 refreshMarkdown()
                 return
-            case "]":
+            default: break
+            }
+            // keyCode 30 = ], keyCode 33 = [
+            if event.keyCode == 30 {
                 indentSelection(indent: true)
                 return
-            case "[":
+            } else if event.keyCode == 33 {
                 indentSelection(indent: false)
                 return
-            default: break
             }
         }
         super.keyDown(with: event)
